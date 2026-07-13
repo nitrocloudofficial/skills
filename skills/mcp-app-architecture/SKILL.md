@@ -43,7 +43,27 @@ import { UsersTools } from './users.tools.js';
   providers: [UsersService, UsersTools],
   exports: [UsersService],
 })
-export class UsersModule {}
+
+## Controllers
+Use the `@ControllerDecorator` (or alias it as `@Controller`) to group tools, resources, and prompts together. Controllers are automatically registered as singletons in the DI container.
+
+### Key Controller Options:
+* **`prefix`**: A string prefix applied to every `@Tool` defined in this controller. For example, `@ControllerDecorator('github')` prefixing a tool named `create_issue` exposes it to MCP clients as `github_create_issue`.
+
+```typescript
+import { ControllerDecorator as Controller, Tool, ExecutionContext } from '@nitrostack/core';
+
+@Controller('github')
+export class GitHubController {
+  @Tool({
+    name: 'create_issue',
+    description: 'Create an issue in a repository',
+    inputSchema: z.object({ /* ... */ })
+  })
+  async createIssue(input: any, ctx: ExecutionContext) {
+    // Exposed to clients as "github_create_issue"
+  }
+}
 ```
 
 ## Dependency Injection (DI)
@@ -68,22 +88,45 @@ export class UsersService {
 ```
 
 ## Lifecycles and Hooks
-Implement lifecycle interfaces to hook into application state changes:
+Implement NestJS-style lifecycle interfaces on modules, controllers, or providers to hook into application state changes:
 
-* **`OnModuleInit`**: Called after modules have initialized but before the server starts listening.
-* **`OnApplicationBootstrap`**: Called once the server is fully started and listening.
-* **`OnModuleDestroy`**: Called when the module or application is shutting down.
+* **`OnModuleInit`** (`onModuleInit`): Called after modules have initialized but before the server starts listening.
+* **`OnApplicationBootstrap`** (`onApplicationBootstrap`): Called once the server is fully started and listening.
+* **`OnModuleDestroy`** (`onModuleDestroy`): Called when the module or application is shutting down.
+* **`BeforeApplicationShutdown`** (`beforeApplicationShutdown(signal?: string)`): Called before the application starts shutting down. Receives the OS signal (e.g. `SIGINT`).
+* **`OnApplicationShutdown`** (`onApplicationShutdown(signal?: string)`): Called during shutdown. Receives the OS signal.
 
 ```typescript
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nitrostack/core';
+import { 
+  Injectable, 
+  OnModuleInit, 
+  OnApplicationBootstrap,
+  OnModuleDestroy, 
+  BeforeApplicationShutdown,
+  OnApplicationShutdown 
+} from '@nitrostack/core';
 
 @Injectable()
-export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+export class DatabaseService 
+  implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, BeforeApplicationShutdown, OnApplicationShutdown 
+{
   async onModuleInit() {
     await this.connect();
   }
 
+  async onApplicationBootstrap() {
+    console.log('App ready to handle connections.');
+  }
+
   async onModuleDestroy() {
+    await this.cleanupPendingQueries();
+  }
+
+  async beforeApplicationShutdown(signal?: string) {
+    console.log(`Shutting down soon (signal: ${signal}).`);
+  }
+
+  async onApplicationShutdown(signal?: string) {
     await this.disconnect();
   }
 }

@@ -16,8 +16,9 @@ An MCP tool exposes a function that an AI client can invoke. Decorate a service 
 * `outputSchema` (optional): Zod schema validating the output structure.
 
 ```typescript
-import { Tool, z, ExecutionContext } from '@nitrostack/core';
+import { ToolDecorator as Tool, ControllerDecorator as Controller, InitialTool, z, ExecutionContext } from '@nitrostack/core';
 
+@Controller('weather')
 export class WeatherService {
   @Tool({
     name: 'get_current_weather',
@@ -27,6 +28,7 @@ export class WeatherService {
       unit: z.enum(['celsius', 'fahrenheit']).default('celsius'),
     }),
   })
+  @InitialTool() // Auto-invoked when the AI client initializes/starts
   async getWeather(
     input: { city: string; unit: 'celsius' | 'fahrenheit' },
     ctx: ExecutionContext
