@@ -1,6 +1,6 @@
 ---
 name: nitrostack-tools-resources-prompts
-description: Guidelines and patterns for defining Tools, Resources, and Prompts in a NitroStack application with schema validation via Zod, including caching and rate-limiting.
+description: Guidelines and patterns for defining Tools, Resources, and Prompts in a NitroStack application with schema validation via Zod, including caching, rate-limiting, and base64 file uploads.
 ---
 
 ## When to Use
@@ -185,6 +185,103 @@ export class DiagnosticTools {
   })
   async requestSupply(input: { item: string }, ctx: ExecutionContext) {
     // ...
+  }
+}
+```
+
+---
+
+## Handling File Uploads in Tools
+NitroStack supports file uploads from MCP clients (like NitroStudio) by passing the file as a base64-encoded string inside a tool's input parameters.
+
+### 1. Declaring Input Schema for File Uploads
+To accept an uploaded file, define three Zod fields in your tool's `inputSchema`:
+* `file_name`: The name of the file (e.g. `report.csv`).
+* `file_type`: The MIME type (e.g. `text/csv`).
+* `file_content`: The base64-encoded string containing the file data.
+
+```typescript
+import { ToolDecorator as Tool, ExecutionContext, z } from '@nitrostack/core';
+
+export class FileTools {
+  @Tool({
+    name: 'upload_document',
+    description: 'Upload a text document or image.',
+    inputSchema: z.object({
+      file_name: z.string().describe('Name of the uploaded file'),
+      file_type: z.string().describe('MIME type of the uploaded file'),
+      file_content: z.string().describe('Base64 encoded file content'),
+    })
+  })
+  async uploadDocument(input: any, ctx: ExecutionContext) {
+    // Processing logic
+  }
+}
+```
+
+### 2. Decoding Base64 Payloads
+File uploads can arrive in two formats depending on the client:
+1. **Data URL format**: `data:image/png;base64,iVBORw0KGgo...`
+2. **Raw Base64 format**: `iVBORw0KGgo...`
+
+Use the following universal decoder pattern to parse either format into a Node `Buffer`:
+
+```typescript
+import * as fs from 'fs';
+import * as path from 'path';
+
+function decodeBase64File(content: string): Buffer {
+  const matches = content.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  
+  if (matches && matches.length === 3) {
+    // Data URL format - decode matches[2]
+    return Buffer.from(matches[2], 'base64');
+  } else {
+    // Raw base64 format - decode input directly
+    return Buffer.from(content, 'base64');
+  }
+}
+```
+
+### 3. Secure File Saving Example
+Always validate the directory paths to prevent directory traversal attacks when saving files to disk.
+
+```typescript
+import { ToolDecorator as Tool, ExecutionContext, z } from '@nitrostack/core';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+
+export class SecureUploadTools {
+  @Tool({
+    name: 'save_uploaded_file',
+    description: 'Decodes and saves an uploaded file securely.',
+    inputSchema: z.object({
+      file_name: z.string().describe('Name of the uploaded file'),
+      file_type: z.string().describe('MIME type of the uploaded file'),
+      file_content: z.string().describe('Base64 encoded file content'),
+    })
+  })
+  async saveFile(input: any, ctx: ExecutionContext) {
+    // Ensure uploads directory exists
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+
+    // Secure destination path to prevent path traversal
+    const safeName = path.basename(input.file_name);
+    const filePath = path.join(UPLOAD_DIR, safeName);
+    if (!filePath.startsWith(UPLOAD_DIR)) {
+      throw new Error('Invalid file path detected (path traversal).');
+    }
+
+    // Decode and write to disk
+    const buffer = decodeBase64File(input.file_content);
+    fs.writeFileSync(filePath, buffer);
+
+    ctx.logger.info(`Successfully saved file: ${safeName}`);
+    return { success: true, path: filePath };
   }
 }
 ```

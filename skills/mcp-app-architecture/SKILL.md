@@ -1,6 +1,6 @@
 ---
 name: nitrostack-mcp-app-architecture
-description: Best practices and guidelines for bootstrapping, defining modules, using dependency injection, and managing server lifecycles in the NitroStack SDK.
+description: Best practices and guidelines for bootstrapping, defining modules, using dependency injection, managing server lifecycles, and handling events in the NitroStack SDK.
 ---
 
 ## When to Use
@@ -131,3 +131,46 @@ export class DatabaseService
   }
 }
 ```
+
+---
+
+## Eventing System (`emitEvent` and `@OnEvent`)
+NitroStack includes an internal eventing system to decouple components. A service or tool can emit an event using `emitEvent`, and any injectable class (like a handler service or controller) can subscribe using the `@OnEvent` decorator.
+
+### 1. Emitting Events
+Call `emitEvent` to dispatch an event payload asynchronously.
+
+```typescript
+import { Injectable, emitEvent } from '@nitrostack/core';
+
+@Injectable()
+export class SpaceShipService {
+  async launchShip(shipId: string) {
+    // Process launch...
+    
+    // Dispatch event
+    emitEvent('ship.launched', {
+      shipId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+```
+
+### 2. Listening to Events
+Decorate a method inside any `@Injectable()` class with `@OnEvent('event_pattern')` to register it as an event handler.
+
+```typescript
+import { Injectable, OnEvent } from '@nitrostack/core';
+
+@Injectable({ deps: [] })
+export class FlightLogHandler {
+  @OnEvent('ship.launched')
+  async logLaunch(data: { shipId: string; timestamp: string }) {
+    console.error(`🚀 [EVENT] Ship ${data.shipId} was successfully launched at ${data.timestamp}`);
+  }
+}
+```
+
+> [!NOTE]
+> For the `@OnEvent` decorator to register properly, the containing class must be declared as a provider inside an active module.
