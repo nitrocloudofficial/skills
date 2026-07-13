@@ -1,6 +1,6 @@
 ---
 name: nitrostack-tools-resources-prompts
-description: Guidelines and patterns for defining Tools, Resources, and Prompts in a NitroStack application with schema validation via Zod.
+description: Guidelines and patterns for defining Tools, Resources, and Prompts in a NitroStack application with schema validation via Zod, including caching and rate-limiting.
 ---
 
 ## When to Use
@@ -104,6 +104,87 @@ export class PromptTemplates {
         },
       ],
     };
+  }
+}
+```
+
+---
+
+## Tool Policies: Caching (`@Cache`) and Rate Limiting (`@RateLimit`)
+You can control tool execution behaviors (such as performance optimization and throttling) using method decorators.
+
+### 1. Caching with `@Cache`
+Use `@Cache` to cache tool execution outputs for a specified duration (TTL in seconds). This reduces database or API overhead for frequent identical requests.
+
+#### Options:
+* `ttl`: Cache time-to-live in seconds (required).
+* `key` (optional): Custom function `(input: any, context?: any) => string` that returns a unique cache key based on inputs. If not defined, a key is auto-generated from serialized input arguments.
+
+#### Example:
+```typescript
+import { ToolDecorator as Tool, Cache, z } from '@nitrostack/core';
+
+export class StationTools {
+  @Tool({
+    name: 'get_system_status',
+    description: 'Fetch real-time station metrics. Response is cached.',
+    inputSchema: z.object({}),
+  })
+  @Cache({ ttl: 60 }) // Caches status for 60 seconds
+  async getSystemStatus() {
+    return { temperature: 21.5, oxygen: 0.98 };
+  }
+
+  @Tool({
+    name: 'get_crew_status',
+    description: 'Fetch status of a crew member. Cached by crew ID.',
+    inputSchema: z.object({ id: z.string() }),
+  })
+  @Cache({
+    ttl: 300,
+    key: (input) => `crew:status:${input.id}`
+  })
+  async getCrewStatus(input: { id: string }) {
+    // ...
+  }
+}
+```
+
+### 2. Rate Limiting with `@RateLimit`
+Use `@RateLimit` to restrict the number of tool invocations within a specified time window to prevent client abuse.
+
+#### Options:
+* `requests`: Number of allowed requests in the window (required).
+* `window`: Throttling duration window (required). Supports formats like `'1s'`, `'1m'`, `'1h'`.
+* `key` (optional): Custom function `(context: ExecutionContext) => string` to group rate limits. Useful for rate-limiting per user role or API key.
+
+#### Example:
+```typescript
+import { ToolDecorator as Tool, RateLimit, z, ExecutionContext } from '@nitrostack/core';
+
+export class DiagnosticTools {
+  @Tool({
+    name: 'run_deep_diagnostic',
+    description: 'Run intensive diagnostics. Rate limited.',
+    inputSchema: z.object({}),
+  })
+  @RateLimit({ requests: 3, window: '1m' }) // Max 3 requests per minute globally
+  async runDeepDiagnostic() {
+    return { diagnosticReport: 'All systems operational.' };
+  }
+
+  @Tool({
+    name: 'request_supply_drop',
+    description: 'Request inventory supplies. Rate limited per user.',
+    inputSchema: z.object({ item: z.string() }),
+  })
+  @RateLimit({
+    requests: 5,
+    window: '1h',
+    key: (ctx: ExecutionContext) => ctx.auth?.subject || 'anonymous'
+  })
+  async requestSupply(input: { item: string }, ctx: ExecutionContext) {
+    // ...
   }
 }
 ```

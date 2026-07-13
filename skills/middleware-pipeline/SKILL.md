@@ -1,6 +1,6 @@
 ---
 name: nitrostack-middleware-pipeline
-description: Best practices for implementing and applying Guards, Interceptors, Pipes, and Exception Filters in the NitroStack SDK.
+description: Best practices for implementing and applying Guards, Interceptors, Middleware, Pipes, and Exception Filters in the NitroStack SDK.
 ---
 
 ## When to Use
@@ -134,3 +134,102 @@ export class LoggingTools {
 }
 ```
 
+---
+
+## 4. Middleware (`MiddlewareInterface`, `@Middleware` and `@UseMiddleware`)
+Middleware executes before the request reaches the tool handler, and can wrap the handler execution by invoking `next()`.
+
+### Interface:
+```typescript
+import { ExecutionContext } from '@nitrostack/core';
+
+export interface MiddlewareInterface {
+  use(context: ExecutionContext, next: () => Promise<unknown>): Promise<unknown>;
+}
+```
+
+### Example:
+```typescript
+import { Middleware, MiddlewareInterface, ExecutionContext } from '@nitrostack/core';
+
+@Middleware()
+export class LoggingMiddleware implements MiddlewareInterface {
+  async use(context: ExecutionContext, next: () => Promise<unknown>): Promise<unknown> {
+    context.logger.info(`Entering tool: ${context.toolName}`);
+    try {
+      const result = await next();
+      context.logger.info(`Exiting tool: ${context.toolName}`);
+      return result;
+    } catch (error) {
+      context.logger.error(`Error in tool: ${error}`);
+      throw error;
+    }
+  }
+}
+```
+
+Apply the middleware using `@UseMiddleware(...)` on a tool method:
+```typescript
+import { Tool, UseMiddleware, z } from '@nitrostack/core';
+import { LoggingMiddleware } from './logging.middleware.js';
+
+export class StationTools {
+  @Tool({
+    name: 'fetch_logs',
+    description: 'Fetch station operations logs.',
+    inputSchema: z.object({}),
+  })
+  @UseMiddleware(LoggingMiddleware)
+  async fetchLogs() {
+    return { status: 'operational' };
+  }
+}
+```
+
+---
+
+## 5. Pipes (`PipeInterface`, `@Pipe` and `@UsePipes`)
+Pipes are used to transform or validate input arguments before they reach the tool handler method.
+
+### Interface:
+```typescript
+import { ArgumentMetadata } from '@nitrostack/core';
+
+export interface PipeInterface<T = unknown, R = unknown> {
+  transform(value: T, metadata: ArgumentMetadata): R | Promise<R>;
+}
+```
+
+### Example:
+```typescript
+import { Pipe, PipeInterface, ArgumentMetadata } from '@nitrostack/core';
+
+@Pipe()
+export class TrimPipe implements PipeInterface<Record<string, unknown>, Record<string, unknown>> {
+  transform(value: Record<string, unknown>, metadata: ArgumentMetadata) {
+    const trimmed: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      trimmed[key] = typeof val === 'string' ? val.trim() : val;
+    }
+    return trimmed;
+  }
+}
+```
+
+Apply the pipe using `@UsePipes(...)` on a tool method:
+```typescript
+import { Tool, UsePipes, z } from '@nitrostack/core';
+import { TrimPipe } from './trim.pipe.js';
+
+export class MessagingTools {
+  @Tool({
+    name: 'send_message',
+    description: 'Send a message to other stations.',
+    inputSchema: z.object({ text: z.string() }),
+  })
+  @UsePipes(TrimPipe)
+  async sendMessage(input: { text: string }) {
+    return { sentText: input.text };
+  }
+}
+```
