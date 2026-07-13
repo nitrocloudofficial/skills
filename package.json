@@ -1,0 +1,10 @@
+{
+  "name": "@nitrostack/skills",
+  "version": "1.0.0",
+  "description": "AI Agent skills and best practices for NitroStack SDK",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nitrocloudofficial/skills.git"
+  },
+  "private": true
+}
