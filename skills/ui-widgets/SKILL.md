@@ -276,7 +276,7 @@ To avoid manual TypeScript interface duplication between backend Zod schemas and
    ```
 3. Import the generated type in your widget component:
    ```tsx
-   import { GetProductOutput } from '../../types/tool-data.js';
+   import { GetProductOutput } from '../../types/tool-data';
 
    const data = getToolOutput<GetProductOutput>();
    ```

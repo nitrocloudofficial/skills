@@ -104,7 +104,6 @@ import { Module, ConfigModule } from '@nitrostack/core';
   imports: [
     ConfigModule.forRoot({
       envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
-      isGlobal: true,
     }),
   ],
 })
@@ -198,11 +197,10 @@ To guarantee bulletproof dependency resolution in Node ESM, **always specify exp
 
 ```typescript
 // src/users/users.service.ts
-import { Injectable, Scope } from '@nitrostack/core';
+import { Injectable } from '@nitrostack/core';
 import { DatabaseService } from '../database/database.service.js';
 
 @Injectable({
-  scope: Scope.SINGLETON, // Default: Scope.SINGLETON
   deps: [DatabaseService], // Explicit deps prevent reflection loss in Node ESM
 })
 export class UsersService {
@@ -214,13 +212,9 @@ export class UsersService {
 }
 ```
 
-### Injection Scopes
+### Dependency Resolution & Singletons
 
-| Scope | Enum | Description |
-| :--- | :--- | :--- |
-| **Singleton** | `Scope.SINGLETON` | (Default) A single instance is shared across the entire application runtime. |
-| **Transient** | `Scope.TRANSIENT` | A brand-new instance is instantiated every time it is injected or resolved. |
-| **Scoped** | `Scope.SCOPED` | A new instance is created per incoming request or context session. |
+NitroStack's DI container (`DIContainer`) operates on a singleton pattern, caching resolved instances across the server lifecycle. To inject dependencies safely across ES module boundaries, always declare constructor tokens in `deps`.
 
 ---
 
